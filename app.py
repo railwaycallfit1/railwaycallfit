@@ -5,9 +5,9 @@ import os
 
 app = Flask(__name__)
 
-# =========================================================
+# =========================
 # CONFIGURACIÓN MYSQL
-# =========================================================
+# =========================
 
 app.config["MYSQL_HOST"] = os.environ.get("DB_HOST")
 app.config["MYSQL_USER"] = os.environ.get("DB_USER")
@@ -19,13 +19,87 @@ mysql = MySQL(app)
 CORS(app)
 
 
-# =========================================================
-# 1. USUARIO
-# =========================================================
+# ============================================================
+# USUARIO
+# ============================================================
 
-# CREAR USUARIO
+# Obtener todos los usuarios
+@app.route("/usuario", methods=["GET"])
+def obtener_usuarios():
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            id,
+            nombre,
+            apellido,
+            fecha_nacimiento,
+            email,
+            contrasenia,
+            contexto_aceptado
+        FROM usuario
+    """)
+
+    usuarios = cursor.fetchall()
+
+    cursor.close()
+
+    resultado = []
+
+    for usuario in usuarios:
+        resultado.append({
+            "id": usuario[0],
+            "nombre": usuario[1],
+            "apellido": usuario[2],
+            "fecha_nacimiento": str(usuario[3]),
+            "email": usuario[4],
+            "contrasenia": usuario[5],
+            "contexto_aceptado": bool(usuario[6])
+        })
+
+    return jsonify(resultado)
+
+
+# Obtener usuario por ID
+@app.route("/usuario/<int:id>", methods=["GET"])
+def obtener_usuario(id):
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            id,
+            nombre,
+            apellido,
+            fecha_nacimiento,
+            email,
+            contrasenia,
+            contexto_aceptado
+        FROM usuario
+        WHERE id = %s
+    """, (id,))
+
+    usuario = cursor.fetchone()
+
+    cursor.close()
+
+    if not usuario:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    return jsonify({
+        "id": usuario[0],
+        "nombre": usuario[1],
+        "apellido": usuario[2],
+        "fecha_nacimiento": str(usuario[3]),
+        "email": usuario[4],
+        "contrasenia": usuario[5],
+        "contexto_aceptado": bool(usuario[6])
+    })
+
+
+# Crear usuario
 @app.route("/usuario", methods=["POST"])
-@cross_origin()
 def crear_usuario():
 
     datos = request.json
@@ -39,13 +113,18 @@ def crear_usuario():
 
     cursor = mysql.connection.cursor()
 
-    sql = """
+    cursor.execute("""
         INSERT INTO usuario
-        (nombre, apellido, fecha_nacimiento, email, contrasenia, contexto_aceptado)
+        (
+            nombre,
+            apellido,
+            fecha_nacimiento,
+            email,
+            contrasenia,
+            contexto_aceptado
+        )
         VALUES (%s, %s, %s, %s, %s, %s)
-    """
-
-    cursor.execute(sql, (
+    """, (
         nombre,
         apellido,
         fecha_nacimiento,
@@ -61,126 +140,13 @@ def crear_usuario():
     cursor.close()
 
     return jsonify({
-        "resultado": "Usuario creado correctamente",
+        "mensaje": "Usuario creado correctamente",
         "id": nuevo_id
     }), 201
 
 
-# OBTENER USUARIOS
-@app.route("/usuario", methods=["GET"])
-@cross_origin()
-def obtener_usuarios():
-
-    cursor = mysql.connection.cursor()
-
-    sql = """
-        SELECT
-            id,
-            nombre,
-            apellido,
-            fecha_nacimiento,
-            email,
-            contrasenia,
-            contexto_aceptado
-        FROM usuario
-        ORDER BY id ASC
-    """
-
-    cursor.execute(sql)
-
-    registros = cursor.fetchall()
-
-    cursor.close()
-
-    usuarios = []
-
-    for usuario in registros:
-
-        usuarios.append({
-            "id": usuario[0],
-            "nombre": usuario[1],
-            "apellido": usuario[2],
-            "fecha_nacimiento": usuario[3],
-            "email": usuario[4],
-            "contrasenia": usuario[5],
-            "contexto_aceptado": usuario[6]
-        })
-
-    return jsonify(usuarios)
-
-
-# OBTENER UN USUARIO
-@app.route("/usuario/<int:id>", methods=["GET"])
-@cross_origin()
-def obtener_usuario(id):
-
-    cursor = mysql.connection.cursor()
-
-    sql = """
-        SELECT
-            id,
-            nombre,
-            apellido,
-            fecha_nacimiento,
-            email,
-            contrasenia,
-            contexto_aceptado
-        FROM usuario
-        WHERE id = %s
-    """
-
-    cursor.execute(sql, (id,))
-
-    usuario = cursor.fetchone()
-
-    cursor.close()
-
-    if usuario is None:
-        return jsonify({
-            "mensaje": "Usuario no encontrado"
-        }), 404
-
-    return jsonify({
-        "id": usuario[0],
-        "nombre": usuario[1],
-        "apellido": usuario[2],
-        "fecha_nacimiento": usuario[3],
-        "email": usuario[4],
-        "contrasenia": usuario[5],
-        "contexto_aceptado": usuario[6]
-    })
-
-
-# ELIMINAR USUARIO
-@app.route("/usuario/<int:id>", methods=["DELETE"])
-@cross_origin()
-def eliminar_usuario(id):
-
-    cursor = mysql.connection.cursor()
-
-    sql = "DELETE FROM usuario WHERE id = %s"
-
-    cursor.execute(sql, (id,))
-
-    mysql.connection.commit()
-
-    eliminado = cursor.rowcount
-
-    cursor.close()
-
-    if eliminado == 0:
-        return jsonify({
-            "mensaje": "Usuario no encontrado"
-        }), 404
-
-    return jsonify({
-        "resultado": "Usuario eliminado correctamente"
-    })
-
-
-# ACTUALIZAR USUARIO
+# Actualizar usuario
 @app.route("/usuario/<int:id>", methods=["PUT"])
-@cross_origin()
 def actualizar_usuario(id):
 
     datos = request.json
@@ -194,7 +160,7 @@ def actualizar_usuario(id):
 
     cursor = mysql.connection.cursor()
 
-    sql = """
+    cursor.execute("""
         UPDATE usuario
         SET
             nombre = %s,
@@ -204,9 +170,7 @@ def actualizar_usuario(id):
             contrasenia = %s,
             contexto_aceptado = %s
         WHERE id = %s
-    """
-
-    cursor.execute(sql, (
+    """, (
         nombre,
         apellido,
         fecha_nacimiento,
@@ -218,74 +182,85 @@ def actualizar_usuario(id):
 
     mysql.connection.commit()
 
-    actualizado = cursor.rowcount
+    if cursor.rowcount == 0:
+        cursor.close()
+        return jsonify({"error": "Usuario no encontrado"}), 404
 
     cursor.close()
 
-    if actualizado == 0:
-        return jsonify({
-            "mensaje": "Usuario no encontrado"
-        }), 404
-
     return jsonify({
-        "resultado": "Usuario actualizado correctamente"
+        "mensaje": "Usuario actualizado correctamente"
     })
 
 
-# =========================================================
-# 2. CONDICION
-# =========================================================
+# Eliminar usuario
+@app.route("/usuario/<int:id>", methods=["DELETE"])
+def eliminar_usuario(id):
 
-# OBTENER CONDICIONES
+    cursor = mysql.connection.cursor()
+
+    cursor.execute(
+        "DELETE FROM usuario WHERE id = %s",
+        (id,)
+    )
+
+    mysql.connection.commit()
+
+    if cursor.rowcount == 0:
+        cursor.close()
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    cursor.close()
+
+    return jsonify({
+        "mensaje": "Usuario eliminado correctamente"
+    })
+
+
+# ============================================================
+# CONDICION
+# ============================================================
+
+# Obtener condiciones
 @app.route("/condicion", methods=["GET"])
-@cross_origin()
 def obtener_condiciones():
 
     cursor = mysql.connection.cursor()
 
-    sql = """
-        SELECT
-            id_condicion,
-            condicion
+    cursor.execute("""
+        SELECT id_condicion, condicion
         FROM condicion
-        ORDER BY id_condicion ASC
-    """
+    """)
 
-    cursor.execute(sql)
-
-    registros = cursor.fetchall()
+    condiciones = cursor.fetchall()
 
     cursor.close()
 
-    condiciones = []
+    resultado = []
 
-    for condicion in registros:
-
-        condiciones.append({
+    for condicion in condiciones:
+        resultado.append({
             "id_condicion": condicion[0],
             "condicion": condicion[1]
         })
 
-    return jsonify(condiciones)
+    return jsonify(resultado)
 
 
-# CREAR CONDICION
+# Crear condición
 @app.route("/condicion", methods=["POST"])
-@cross_origin()
 def crear_condicion():
 
     datos = request.json
 
-    nombre = datos["condicion"]
+    condicion = datos["condicion"]
 
     cursor = mysql.connection.cursor()
 
-    sql = """
+    cursor.execute("""
         INSERT INTO condicion (condicion)
         VALUES (%s)
-    """
-
-    cursor.execute(sql, (nombre,))
+    """, (condicion,))
 
     mysql.connection.commit()
 
@@ -294,23 +269,74 @@ def crear_condicion():
     cursor.close()
 
     return jsonify({
-        "resultado": "Condición creada correctamente",
+        "mensaje": "Condición creada correctamente",
         "id_condicion": nuevo_id
     }), 201
 
 
-# =========================================================
-# 3. RECETAS
-# =========================================================
+# Actualizar condición
+@app.route("/condicion/<int:id>", methods=["PUT"])
+def actualizar_condicion(id):
 
-# OBTENER RECETAS
+    datos = request.json
+    condicion = datos["condicion"]
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
+        UPDATE condicion
+        SET condicion = %s
+        WHERE id_condicion = %s
+    """, (condicion, id))
+
+    mysql.connection.commit()
+
+    if cursor.rowcount == 0:
+        cursor.close()
+        return jsonify({"error": "Condición no encontrada"}), 404
+
+    cursor.close()
+
+    return jsonify({
+        "mensaje": "Condición actualizada correctamente"
+    })
+
+
+# Eliminar condición
+@app.route("/condicion/<int:id>", methods=["DELETE"])
+def eliminar_condicion(id):
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
+        DELETE FROM condicion
+        WHERE id_condicion = %s
+    """, (id,))
+
+    mysql.connection.commit()
+
+    if cursor.rowcount == 0:
+        cursor.close()
+        return jsonify({"error": "Condición no encontrada"}), 404
+
+    cursor.close()
+
+    return jsonify({
+        "mensaje": "Condición eliminada correctamente"
+    })
+
+
+# ============================================================
+# RECETAS
+# ============================================================
+
+# Obtener todas las recetas
 @app.route("/recetas", methods=["GET"])
-@cross_origin()
 def obtener_recetas():
 
     cursor = mysql.connection.cursor()
 
-    sql = """
+    cursor.execute("""
         SELECT
             r.id_receta,
             r.titulo,
@@ -329,20 +355,16 @@ def obtener_recetas():
         FROM recetas r
         INNER JOIN condicion c
             ON r.id_condicion = c.id_condicion
-        ORDER BY r.id_receta ASC
-    """
+    """)
 
-    cursor.execute(sql)
-
-    registros = cursor.fetchall()
+    recetas = cursor.fetchall()
 
     cursor.close()
 
-    recetas = []
+    resultado = []
 
-    for receta in registros:
-
-        recetas.append({
+    for receta in recetas:
+        resultado.append({
             "id_receta": receta[0],
             "titulo": receta[1],
             "descripcion": receta[2],
@@ -359,17 +381,16 @@ def obtener_recetas():
             "preparacion": receta[13]
         })
 
-    return jsonify(recetas)
+    return jsonify(resultado)
 
 
-# OBTENER UNA RECETA
+# Obtener receta por ID
 @app.route("/recetas/<int:id>", methods=["GET"])
-@cross_origin()
 def obtener_receta(id):
 
     cursor = mysql.connection.cursor()
 
-    sql = """
+    cursor.execute("""
         SELECT
             r.id_receta,
             r.titulo,
@@ -389,18 +410,14 @@ def obtener_receta(id):
         INNER JOIN condicion c
             ON r.id_condicion = c.id_condicion
         WHERE r.id_receta = %s
-    """
-
-    cursor.execute(sql, (id,))
+    """, (id,))
 
     receta = cursor.fetchone()
 
     cursor.close()
 
-    if receta is None:
-        return jsonify({
-            "mensaje": "Receta no encontrada"
-        }), 404
+    if not receta:
+        return jsonify({"error": "Receta no encontrada"}), 404
 
     return jsonify({
         "id_receta": receta[0],
@@ -420,16 +437,15 @@ def obtener_receta(id):
     })
 
 
-# CREAR RECETA
+# Crear receta
 @app.route("/recetas", methods=["POST"])
-@cross_origin()
 def crear_receta():
 
     datos = request.json
 
     cursor = mysql.connection.cursor()
 
-    sql = """
+    cursor.execute("""
         INSERT INTO recetas
         (
             titulo,
@@ -446,9 +462,7 @@ def crear_receta():
             preparacion
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """
-
-    cursor.execute(sql, (
+    """, (
         datos["titulo"],
         datos.get("descripcion"),
         datos.get("imagen"),
@@ -470,71 +484,99 @@ def crear_receta():
     cursor.close()
 
     return jsonify({
-        "resultado": "Receta creada correctamente",
+        "mensaje": "Receta creada correctamente",
         "id_receta": nuevo_id
     }), 201
 
 
-# =========================================================
-# 4. REGISTRO GLUCOSA
-# =========================================================
+# Actualizar receta
+@app.route("/recetas/<int:id>", methods=["PUT"])
+def actualizar_receta(id):
 
-@app.route("/registro_glucosa", methods=["GET", "POST"])
-@cross_origin()
-def registro_glucosa():
+    datos = request.json
 
     cursor = mysql.connection.cursor()
 
-    # -------------------------
-    # POST
-    # -------------------------
+    cursor.execute("""
+        UPDATE recetas
+        SET
+            titulo = %s,
+            descripcion = %s,
+            imagen = %s,
+            porcion = %s,
+            calorias = %s,
+            proteinas = %s,
+            carbohidratos = %s,
+            grasas = %s,
+            sodio = %s,
+            id_condicion = %s,
+            ingredientes = %s,
+            preparacion = %s
+        WHERE id_receta = %s
+    """, (
+        datos["titulo"],
+        datos.get("descripcion"),
+        datos.get("imagen"),
+        datos["porcion"],
+        datos["calorias"],
+        datos["proteinas"],
+        datos["carbohidratos"],
+        datos["grasas"],
+        datos["sodio"],
+        datos["id_condicion"],
+        datos["ingredientes"],
+        datos["preparacion"],
+        id
+    ))
 
-    if request.method == "POST":
+    mysql.connection.commit()
 
-        datos = request.json
-
-        glucosa = datos["glucosa"]
-        fecha = datos["fecha"]
-        usuario_id = datos["Usuario_id"]
-        nota = datos["nota"]
-        comentarios = datos.get("comentarios")
-
-        sql = """
-            INSERT INTO registro_glucosa
-            (
-                glucosa,
-                fecha,
-                Usuario_id,
-                nota,
-                comentarios
-            )
-            VALUES (%s, %s, %s, %s, %s)
-        """
-
-        cursor.execute(sql, (
-            glucosa,
-            fecha,
-            usuario_id,
-            nota,
-            comentarios
-        ))
-
-        mysql.connection.commit()
-
-        nuevo_id = cursor.lastrowid
-
+    if cursor.rowcount == 0:
         cursor.close()
+        return jsonify({"error": "Receta no encontrada"}), 404
 
-        return jsonify({
-            "resultado": "Glucosa guardada correctamente",
-            "id_registro": nuevo_id
-        }), 201
+    cursor.close()
 
-    # -------------------------
-    # GET
-    # -------------------------
+    return jsonify({
+        "mensaje": "Receta actualizada correctamente"
+    })
 
-    sql = """
+
+# Eliminar receta
+@app.route("/recetas/<int:id>", methods=["DELETE"])
+def eliminar_receta(id):
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
+        DELETE FROM recetas
+        WHERE id_receta = %s
+    """, (id,))
+
+    mysql.connection.commit()
+
+    if cursor.rowcount == 0:
+        cursor.close()
+        return jsonify({"error": "Receta no encontrada"}), 404
+
+    cursor.close()
+
+    return jsonify({
+        "mensaje": "Receta eliminada correctamente"
+    })
+
+
+# ============================================================
+# REGISTRO DE GLUCOSA
+# ============================================================
+
+# Obtener registros
+@app.route("/registro_glucosa", methods=["GET"])
+def obtener_registros_glucosa():
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
         SELECT
             id_registro,
             glucosa,
@@ -543,52 +585,147 @@ def registro_glucosa():
             nota,
             comentarios
         FROM registro_glucosa
-        ORDER BY fecha ASC
-    """
-
-    cursor.execute(sql)
+        ORDER BY fecha DESC
+    """)
 
     registros = cursor.fetchall()
 
     cursor.close()
 
-    datos = []
+    resultado = []
 
     for registro in registros:
-
-        fecha = registro[2]
-
-        if hasattr(fecha, "strftime"):
-            fecha = fecha.strftime("%Y-%m-%d %H:%M:%S")
-
-        datos.append({
+        resultado.append({
             "id_registro": registro[0],
             "glucosa": registro[1],
-            "fecha": fecha,
+            "fecha": registro[2].strftime("%Y-%m-%d %H:%M:%S"),
             "Usuario_id": registro[3],
             "nota": registro[4],
             "comentarios": registro[5]
         })
 
-    return jsonify(datos)
+    return jsonify(resultado)
 
 
-# =========================================================
-# 5. PLAN SEMANAL
-# =========================================================
-
-# OBTENER PLAN SEMANAL
-@app.route("/plan_semanal", methods=["GET"])
+# Crear registro
+@app.route("/registro_glucosa", methods=["POST"])
 @cross_origin()
-def obtener_plan():
+def crear_registro_glucosa():
+
+    datos = request.json
 
     cursor = mysql.connection.cursor()
 
-    sql = """
+    cursor.execute("""
+        INSERT INTO registro_glucosa
+        (
+            glucosa,
+            fecha,
+            Usuario_id,
+            nota,
+            comentarios
+        )
+        VALUES (%s, %s, %s, %s, %s)
+    """, (
+        datos["glucosa"],
+        datos["fecha"],
+        datos["Usuario_id"],
+        datos["nota"],
+        datos.get("comentarios")
+    ))
+
+    mysql.connection.commit()
+
+    nuevo_id = cursor.lastrowid
+
+    cursor.close()
+
+    return jsonify({
+        "mensaje": "Registro de glucosa creado correctamente",
+        "id_registro": nuevo_id
+    }), 201
+
+
+# Actualizar registro de glucosa
+@app.route("/registro_glucosa/<int:id>", methods=["PUT"])
+def actualizar_registro_glucosa(id):
+
+    datos = request.json
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
+        UPDATE registro_glucosa
+        SET
+            glucosa = %s,
+            fecha = %s,
+            Usuario_id = %s,
+            nota = %s,
+            comentarios = %s
+        WHERE id_registro = %s
+    """, (
+        datos["glucosa"],
+        datos["fecha"],
+        datos["Usuario_id"],
+        datos["nota"],
+        datos.get("comentarios"),
+        id
+    ))
+
+    mysql.connection.commit()
+
+    if cursor.rowcount == 0:
+        cursor.close()
+        return jsonify({"error": "Registro no encontrado"}), 404
+
+    cursor.close()
+
+    return jsonify({
+        "mensaje": "Registro de glucosa actualizado correctamente"
+    })
+
+
+# Eliminar registro de glucosa
+@app.route("/registro_glucosa/<int:id>", methods=["DELETE"])
+def eliminar_registro_glucosa(id):
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
+        DELETE FROM registro_glucosa
+        WHERE id_registro = %s
+    """, (id,))
+
+    mysql.connection.commit()
+
+    if cursor.rowcount == 0:
+        cursor.close()
+        return jsonify({"error": "Registro no encontrado"}), 404
+
+    cursor.close()
+
+    return jsonify({
+        "mensaje": "Registro de glucosa eliminado correctamente"
+    })
+
+
+# ============================================================
+# PLAN SEMANAL
+# ============================================================
+
+# Obtener plan semanal
+@app.route("/plan_semanal", methods=["GET"])
+def obtener_plan_semanal():
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
         SELECT
             p.id_plan,
             p.Usuario_id,
             p.id_receta,
+            p.dia,
+            p.comida,
             r.titulo,
             r.descripcion,
             r.imagen,
@@ -599,64 +736,51 @@ def obtener_plan():
             r.grasas,
             r.sodio,
             r.ingredientes,
-            r.preparacion,
-            p.dia,
-            p.comida
+            r.preparacion
         FROM plan_semanal p
         INNER JOIN recetas r
             ON p.id_receta = r.id_receta
-        ORDER BY
-            p.Usuario_id,
-            p.id_plan
-    """
+        ORDER BY p.id_plan
+    """)
 
-    cursor.execute(sql)
-
-    registros = cursor.fetchall()
+    planes = cursor.fetchall()
 
     cursor.close()
 
-    plan = []
+    resultado = []
 
-    for registro in registros:
-
-        plan.append({
-            "id_plan": registro[0],
-            "Usuario_id": registro[1],
-            "id_receta": registro[2],
-            "titulo": registro[3],
-            "descripcion": registro[4],
-            "imagen": registro[5],
-            "porcion": registro[6],
-            "calorias": float(registro[7]),
-            "proteinas": float(registro[8]),
-            "carbohidratos": float(registro[9]),
-            "grasas": float(registro[10]),
-            "sodio": float(registro[11]),
-            "ingredientes": registro[12],
-            "preparacion": registro[13],
-            "dia": registro[14],
-            "comida": registro[15]
+    for plan in planes:
+        resultado.append({
+            "id_plan": plan[0],
+            "Usuario_id": plan[1],
+            "id_receta": plan[2],
+            "dia": plan[3],
+            "comida": plan[4],
+            "titulo": plan[5],
+            "descripcion": plan[6],
+            "imagen": plan[7],
+            "porcion": plan[8],
+            "calorias": float(plan[9]),
+            "proteinas": float(plan[10]),
+            "carbohidratos": float(plan[11]),
+            "grasas": float(plan[12]),
+            "sodio": float(plan[13]),
+            "ingredientes": plan[14],
+            "preparacion": plan[15]
         })
 
-    return jsonify(plan)
+    return jsonify(resultado)
 
 
-# CREAR PLAN SEMANAL
+# Crear plan semanal
 @app.route("/plan_semanal", methods=["POST"])
-@cross_origin()
-def crear_plan():
+def crear_plan_semanal():
 
     datos = request.json
 
-    usuario_id = datos["Usuario_id"]
-    id_receta = datos["id_receta"]
-    dia = datos["dia"]
-    comida = datos["comida"]
-
     cursor = mysql.connection.cursor()
 
-    sql = """
+    cursor.execute("""
         INSERT INTO plan_semanal
         (
             Usuario_id,
@@ -665,13 +789,11 @@ def crear_plan():
             comida
         )
         VALUES (%s, %s, %s, %s)
-    """
-
-    cursor.execute(sql, (
-        usuario_id,
-        id_receta,
-        dia,
-        comida
+    """, (
+        datos["Usuario_id"],
+        datos["id_receta"],
+        datos["dia"],
+        datos["comida"]
     ))
 
     mysql.connection.commit()
@@ -681,14 +803,75 @@ def crear_plan():
     cursor.close()
 
     return jsonify({
-        "resultado": "Plan semanal creado correctamente",
+        "mensaje": "Plan semanal creado correctamente",
         "id_plan": nuevo_id
     }), 201
 
 
-# =========================================================
+# Actualizar plan semanal
+@app.route("/plan_semanal/<int:id>", methods=["PUT"])
+def actualizar_plan_semanal(id):
+
+    datos = request.json
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
+        UPDATE plan_semanal
+        SET
+            Usuario_id = %s,
+            id_receta = %s,
+            dia = %s,
+            comida = %s
+        WHERE id_plan = %s
+    """, (
+        datos["Usuario_id"],
+        datos["id_receta"],
+        datos["dia"],
+        datos["comida"],
+        id
+    ))
+
+    mysql.connection.commit()
+
+    if cursor.rowcount == 0:
+        cursor.close()
+        return jsonify({"error": "Plan no encontrado"}), 404
+
+    cursor.close()
+
+    return jsonify({
+        "mensaje": "Plan semanal actualizado correctamente"
+    })
+
+
+# Eliminar plan semanal
+@app.route("/plan_semanal/<int:id>", methods=["DELETE"])
+def eliminar_plan_semanal(id):
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
+        DELETE FROM plan_semanal
+        WHERE id_plan = %s
+    """, (id,))
+
+    mysql.connection.commit()
+
+    if cursor.rowcount == 0:
+        cursor.close()
+        return jsonify({"error": "Plan no encontrado"}), 404
+
+    cursor.close()
+
+    return jsonify({
+        "mensaje": "Plan semanal eliminado correctamente"
+    })
+
+
+# ============================================================
 # INICIAR SERVIDOR
-# =========================================================
+# ============================================================
 
 if __name__ == "__main__":
 

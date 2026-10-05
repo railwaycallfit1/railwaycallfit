@@ -1,85 +1,222 @@
-@URL = railwaycallfit-production.up.railway.app
+@URL = https://railwaycallfit-production.up.railway.app
 
 
-#https://web-production-8ee60.up.railway.app
+############################################################
+# TABLA: USUARIO
+############################################################
 
-# http://127.0.0.1:5000
-
-# https://web-production-b7a31.up.railway.app
-
-
-###
-# Obtener todos los usuarios
-GET {{URL}}/traer_usuarios
+### Obtener todos los usuarios
+GET {{URL}}/usuario
 
 ###
-# Crear usuario
-POST {{URL}}/nuevo_usuario
+
+### Obtener usuario por ID
+GET {{URL}}/usuario/1
+
+###
+
+### Crear usuario
+POST {{URL}}/usuario
 Content-Type: application/json
 
 {
     "nombre": "Juan",
     "apellido": "Perez",
-    "provincia": "Buenos Aires"
+    "fecha_nacimiento": "2008-05-15",
+    "email": "juan.perez@gmail.com",
+    "contrasenia": "123456",
+    "contexto_aceptado": true
 }
 
-
 ###
-# Actualizar usuario con id=1
-PUT {{URL}}/actualizar_usuario/1
+
+### EDITAR usuario por ID
+PUT {{URL}}/usuario/1
 Content-Type: application/json
 
 {
-    "nom": "Juan Actualizado"
+    "nombre": "Christian Actualizado",
+    "apellido": "Prueba",
+    "fecha_nacimiento": "2008-05-15",
+    "email": "christian.prueba@gmail.com",
+    "contrasenia": "123456",
+    "contexto_aceptado": true
 }
 
 ###
-# Eliminar usuario con id=1
-DELETE {{URL}}/eliminar_usuario/1
 
-#######################################
-#PROYECTO
+### ELIMINAR usuario por ID
+DELETE {{URL}}/usuario/1
+
+
+############################################################
+# TABLA: CONDICION
+############################################################
+
+### Obtener todas las condiciones
+GET {{URL}}/condicion
 
 ###
-# Crear usuario
-POST {{URL}}/nuevo_recetas
+
+### Crear condición
+POST {{URL}}/condicion
 Content-Type: application/json
 
 {
-    "dieta": 1,
-    "nombre": "pollo con arroz",
-    "descripcion": "pechuga de pollo con arroz, rico y facil",
-    "carbohidrato": "arroz",
-    "proteina": "pechuga de pollo",
-    "condicion": "diabeticos"
+    "condicion": "Control general"
 }
 
 ###
-# Crear usuario
-POST {{URL}}/nuevo_usuarios
+
+### EDITAR condición por ID
+PUT {{URL}}/condicion/5
 Content-Type: application/json
 
 {
-    "nombre": "christian",
-    "direccionmail": "christian.ramos@example.com",
-    "contraseña": "123456",
-    "edad": "18",
-    "id": "1"
+    "condicion": "Control general actualizado"
 }
 
 ###
-# Obtener todos los usuarios
-GET {{URL}}/traer_recetas
+
+### ELIMINAR condición por ID
+DELETE {{URL}}/condicion/5
+
+
+############################################################
+# TABLA: RECETAS
+############################################################
+
+### Obtener todas las recetas
+GET {{URL}}/recetas
 
 ###
-# Crear usuario
+
+### Obtener receta por ID
+GET {{URL}}/recetas/1
+
+###
+
+### Crear receta
+POST {{URL}}/recetas
+Content-Type: application/json
+
+{
+    "titulo": "Pollo con arroz",
+    "descripcion": "Pechuga de pollo con arroz, rico y fácil",
+    "imagen": "pollo-arroz.jpg",
+    "porcion": "1 porción",
+    "calorias": 450,
+    "proteinas": 35,
+    "carbohidratos": 45,
+    "grasas": 12,
+    "sodio": 300,
+    "id_condicion": 1,
+    "ingredientes": "Pechuga de pollo, arroz, zanahoria",
+    "preparacion": "Cocinar el arroz. Cocinar el pollo y servir junto con las verduras."
+}
+
+###
+
+### EDITAR receta por ID
+PUT {{URL}}/recetas/1
+Content-Type: application/json
+
+{
+    "titulo": "Pollo con arroz integral",
+    "descripcion": "Pechuga de pollo con arroz integral",
+    "imagen": "pollo-arroz-integral.jpg",
+    "porcion": "1 porción",
+    "calorias": 430,
+    "proteinas": 36,
+    "carbohidratos": 40,
+    "grasas": 11,
+    "sodio": 280,
+    "id_condicion": 1,
+    "ingredientes": "Pechuga de pollo, arroz integral, zanahoria",
+    "preparacion": "Cocinar el arroz integral. Cocinar el pollo y servir."
+}
+
+###
+
+### ELIMINAR receta por ID
+DELETE {{URL}}/recetas/1
+
+
+############################################################
+# TABLA: REGISTRO_GLUCOSA
+############################################################
+
+### Obtener todos los registros
+GET {{URL}}/registro_glucosa
+
+###
+
+### Crear registro de glucosa
 POST {{URL}}/registro_glucosa
 Content-Type: application/json
 
 {
     "glucosa": 95,
-    "fecha": "28-9-2026 15:38",
-    "nota": "Despues del almuerzo",
-    "comentarios": "me gusta las pasas",
+    "fecha": "2026-10-05 15:38:00",
+    "nota": "Después del almuerzo",
+    "comentarios": "Me siento bien",
     "Usuario_id": 1
 }
+
+###
+
+### EDITAR registro de glucosa por ID
+PUT {{URL}}/registro_glucosa/1
+Content-Type: application/json
+
+{
+    "glucosa": 110,
+    "fecha": "2026-10-05 15:38:00",
+    "nota": "Después del almuerzo",
+    "comentarios": "Registro actualizado",
+    "Usuario_id": 1
+}
+
+###
+
+### ELIMINAR registro de glucosa por ID
+DELETE {{URL}}/registro_glucosa/1
+
+
+############################################################
+# TABLA: PLAN_SEMANAL
+############################################################
+
+### Obtener todos los planes
+GET {{URL}}/plan_semanal
+
+###
+
+### Crear plan semanal
+POST {{URL}}/plan_semanal
+Content-Type: application/json
+
+{
+    "Usuario_id": 1,
+    "id_receta": 1,
+    "dia": "Lunes",
+    "comida": "Almuerzo"
+}
+
+###
+
+### EDITAR plan semanal por ID
+PUT {{URL}}/plan_semanal/1
+Content-Type: application/json
+
+{
+    "Usuario_id": 1,
+    "id_receta": 2,
+    "dia": "Lunes",
+    "comida": "Cena"
+}
+
+###
+
+### ELIMINAR plan semanal por ID
+DELETE {{URL}}/plan_semanal/1
