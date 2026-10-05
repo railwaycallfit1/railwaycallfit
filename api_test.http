@@ -15,10 +15,10 @@ POST {{URL}}/usuario
 Content-Type: application/json
 
 {
-    "nombre": "Juan",
-    "apellido": "Perez",
-    "fecha_nacimiento": "2008-05-15",
-    "email": "juan.perez@gmail.com",
+    "nombre": "Christian",
+    "apellido": "Ramos",
+    "fecha_nacimiento": "2008-02-6",
+    "email": "christian.ramos@gmail.com",
     "contrasenia": "123456",
     "contexto_aceptado": true
 }
@@ -85,7 +85,7 @@ POST {{URL}}/registro_glucosa
 Content-Type: application/json
 
 {
-    "glucosa": 180,
+    "glucosa": 190,
     "fecha": "2026-10-05 14:25:00",
     "Usuario_id": 1,
     "nota": "Después del almuerzo",
