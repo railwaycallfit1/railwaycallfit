@@ -1,0 +1,82 @@
+@URL = https://web-production-8ee60.up.railway.app
+
+# http://127.0.0.1:5000
+
+# https://web-production-b7a31.up.railway.app
+
+
+###
+# Obtener todos los usuarios
+GET {{URL}}/traer_usuarios
+
+###
+# Crear usuario
+POST {{URL}}/nuevo_usuario
+Content-Type: application/json
+
+{
+    "nombre": "Juan",
+    "apellido": "Perez",
+    "provincia": "Buenos Aires"
+}
+
+
+###
+# Actualizar usuario con id=1
+PUT {{URL}}/actualizar_usuario/1
+Content-Type: application/json
+
+{
+    "nom": "Juan Actualizado"
+}
+
+###
+# Eliminar usuario con id=1
+DELETE {{URL}}/eliminar_usuario/1
+
+#######################################
+#PROYECTO
+
+###
+# Crear usuario
+POST {{URL}}/nuevo_recetas
+Content-Type: application/json
+
+{
+    "dieta": 1,
+    "nombre": "pollo con arroz",
+    "descripcion": "pechuga de pollo con arroz, rico y facil",
+    "carbohidrato": "arroz",
+    "proteina": "pechuga de pollo",
+    "condicion": "diabeticos"
+}
+
+###
+# Crear usuario
+POST {{URL}}/nuevo_usuarios
+Content-Type: application/json
+
+{
+    "nombre": "christian",
+    "direccionmail": "christian.ramos@example.com",
+    "contraseña": "123456",
+    "edad": "18",
+    "id": "1"
+}
+
+###
+# Obtener todos los usuarios
+GET {{URL}}/traer_recetas
+
+###
+# Crear usuario
+POST {{URL}}/registro_glucosa
+Content-Type: application/json
+
+{
+    "glucosa": 95,
+    "fecha": "28-9-2026 15:38",
+    "nota": "Despues del almuerzo",
+    "comentarios": "me gusta las pasas",
+    "Usuario_id": 1
+}
