@@ -1,21 +1,16 @@
-@URL = https://railwaycallfit-production.up.railway.app
+@URL = https://web-production-8ee60.up.railway.app
 
 
 ############################################################
-# TABLA: USUARIO
+# USUARIO
 ############################################################
 
-### Obtener todos los usuarios
+### GET - Obtener usuarios
 GET {{URL}}/usuario
 
 ###
 
-### Obtener usuario por ID
-GET {{URL}}/usuario/1
-
-###
-
-### Crear usuario
+### POST - Crear usuario
 POST {{URL}}/usuario
 Content-Type: application/json
 
@@ -28,37 +23,17 @@ Content-Type: application/json
     "contexto_aceptado": true
 }
 
-###
-
-### EDITAR usuario por ID
-PUT {{URL}}/usuario/1
-Content-Type: application/json
-
-{
-    "nombre": "Christian Actualizado",
-    "apellido": "Prueba",
-    "fecha_nacimiento": "2008-05-15",
-    "email": "christian.prueba@gmail.com",
-    "contrasenia": "123456",
-    "contexto_aceptado": true
-}
-
-###
-
-### ELIMINAR usuario por ID
-DELETE {{URL}}/usuario/1
-
 
 ############################################################
-# TABLA: CONDICION
+# CONDICION
 ############################################################
 
-### Obtener todas las condiciones
+### GET - Obtener condiciones
 GET {{URL}}/condicion
 
 ###
 
-### Crear condición
+### POST - Crear condicion
 POST {{URL}}/condicion
 Content-Type: application/json
 
@@ -66,43 +41,23 @@ Content-Type: application/json
     "condicion": "Control general"
 }
 
-###
-
-### EDITAR condición por ID
-PUT {{URL}}/condicion/5
-Content-Type: application/json
-
-{
-    "condicion": "Control general actualizado"
-}
-
-###
-
-### ELIMINAR condición por ID
-DELETE {{URL}}/condicion/5
-
 
 ############################################################
-# TABLA: RECETAS
+# RECETAS
 ############################################################
 
-### Obtener todas las recetas
+### GET - Obtener recetas
 GET {{URL}}/recetas
 
 ###
 
-### Obtener receta por ID
-GET {{URL}}/recetas/1
-
-###
-
-### Crear receta
+### POST - Crear receta
 POST {{URL}}/recetas
 Content-Type: application/json
 
 {
     "titulo": "Pollo con arroz",
-    "descripcion": "Pechuga de pollo con arroz, rico y fácil",
+    "descripcion": "Pechuga de pollo con arroz integral",
     "imagen": "pollo-arroz.jpg",
     "porcion": "1 porción",
     "calorias": 450,
@@ -111,88 +66,43 @@ Content-Type: application/json
     "grasas": 12,
     "sodio": 300,
     "id_condicion": 1,
-    "ingredientes": "Pechuga de pollo, arroz, zanahoria",
-    "preparacion": "Cocinar el arroz. Cocinar el pollo y servir junto con las verduras."
+    "ingredientes": "Pechuga de pollo, arroz integral y zanahoria",
+    "preparacion": "Cocinar el arroz. Cocinar el pollo y servir con las verduras."
 }
-
-###
-
-### EDITAR receta por ID
-PUT {{URL}}/recetas/1
-Content-Type: application/json
-
-{
-    "titulo": "Pollo con arroz integral",
-    "descripcion": "Pechuga de pollo con arroz integral",
-    "imagen": "pollo-arroz-integral.jpg",
-    "porcion": "1 porción",
-    "calorias": 430,
-    "proteinas": 36,
-    "carbohidratos": 40,
-    "grasas": 11,
-    "sodio": 280,
-    "id_condicion": 1,
-    "ingredientes": "Pechuga de pollo, arroz integral, zanahoria",
-    "preparacion": "Cocinar el arroz integral. Cocinar el pollo y servir."
-}
-
-###
-
-### ELIMINAR receta por ID
-DELETE {{URL}}/recetas/1
 
 
 ############################################################
-# TABLA: REGISTRO_GLUCOSA
+# REGISTRO GLUCOSA
 ############################################################
 
-### Obtener todos los registros
+### GET - Obtener registros
 GET {{URL}}/registro_glucosa
 
 ###
 
-### Crear registro de glucosa
+### POST - Crear registro
 POST {{URL}}/registro_glucosa
 Content-Type: application/json
 
 {
-    "glucosa": 95,
-    "fecha": "2026-10-05 15:38:00",
+    "glucosa": 180,
+    "fecha": "2026-10-05 14:25:00",
+    "Usuario_id": 1,
     "nota": "Después del almuerzo",
-    "comentarios": "Me siento bien",
-    "Usuario_id": 1
+    "comentarios": "Me siento bien"
 }
-
-###
-
-### EDITAR registro de glucosa por ID
-PUT {{URL}}/registro_glucosa/1
-Content-Type: application/json
-
-{
-    "glucosa": 110,
-    "fecha": "2026-10-05 15:38:00",
-    "nota": "Después del almuerzo",
-    "comentarios": "Registro actualizado",
-    "Usuario_id": 1
-}
-
-###
-
-### ELIMINAR registro de glucosa por ID
-DELETE {{URL}}/registro_glucosa/1
 
 
 ############################################################
-# TABLA: PLAN_SEMANAL
+# PLAN SEMANAL
 ############################################################
 
-### Obtener todos los planes
+### GET - Obtener plan semanal
 GET {{URL}}/plan_semanal
 
 ###
 
-### Crear plan semanal
+### POST - Crear plan semanal
 POST {{URL}}/plan_semanal
 Content-Type: application/json
 
@@ -202,21 +112,3 @@ Content-Type: application/json
     "dia": "Lunes",
     "comida": "Almuerzo"
 }
-
-###
-
-### EDITAR plan semanal por ID
-PUT {{URL}}/plan_semanal/1
-Content-Type: application/json
-
-{
-    "Usuario_id": 1,
-    "id_receta": 2,
-    "dia": "Lunes",
-    "comida": "Cena"
-}
-
-###
-
-### ELIMINAR plan semanal por ID
-DELETE {{URL}}/plan_semanal/1
