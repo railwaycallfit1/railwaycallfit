@@ -8,6 +8,8 @@ app = Flask(__name__)
 # =========================
 # CONFIGURACIÓN MYSQL
 # =========================
+def env(nombre):
+    return (os.environ.get(nombre) or "").strip()
 
 app.config["MYSQL_HOST"] = os.environ.get("DB_HOST")
 app.config["MYSQL_USER"] = os.environ.get("DB_USER")
