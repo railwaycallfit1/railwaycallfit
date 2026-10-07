@@ -89,7 +89,7 @@ Content-Type: application/json
 {
     "glucosa": 190,
     "fecha": "2026-10-05 14:25:00",
-    "Usuario_id": 1,
+    "Usuario_id": 4,
     "nota": "Después del almuerzo",
     "comentarios": "Me siento bien"
 }

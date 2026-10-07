@@ -39,7 +39,8 @@ def obtener_usuarios():
             fecha_nacimiento,
             email,
             contrasenia,
-            contexto_aceptado
+            contexto_aceptado,
+            condiciones
         FROM usuario
     """)
 
@@ -57,7 +58,8 @@ def obtener_usuarios():
             "fecha_nacimiento": str(usuario[3]),
             "email": usuario[4],
             "contrasenia": usuario[5],
-            "contexto_aceptado": bool(usuario[6])
+            "contexto_aceptado": bool(usuario[6]),
+            "condiciones": usuario[7] or ""
         })
 
     return jsonify(resultado)
@@ -77,7 +79,8 @@ def obtener_usuario(id):
             fecha_nacimiento,
             email,
             contrasenia,
-            contexto_aceptado
+            contexto_aceptado,
+            condiciones
         FROM usuario
         WHERE id = %s
     """, (id,))
@@ -96,7 +99,8 @@ def obtener_usuario(id):
         "fecha_nacimiento": str(usuario[3]),
         "email": usuario[4],
         "contrasenia": usuario[5],
-        "contexto_aceptado": bool(usuario[6])
+        "contexto_aceptado": bool(usuario[6]),
+        "condiciones": usuario[7] or ""
     })
 
 
@@ -112,6 +116,7 @@ def crear_usuario():
     email = datos["email"]
     contrasenia = datos["contrasenia"]
     contexto_aceptado = datos.get("contexto_aceptado", False)
+    condiciones = datos.get("condiciones", "")
 
     cursor = mysql.connection.cursor()
 
@@ -123,16 +128,18 @@ def crear_usuario():
             fecha_nacimiento,
             email,
             contrasenia,
-            contexto_aceptado
+            contexto_aceptado,
+            condiciones
         )
-        VALUES (%s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
     """, (
         nombre,
         apellido,
         fecha_nacimiento,
         email,
         contrasenia,
-        contexto_aceptado
+        contexto_aceptado,
+        condiciones
     ))
 
     mysql.connection.commit()
@@ -160,6 +167,9 @@ def actualizar_usuario(id):
     contrasenia = datos["contrasenia"]
     contexto_aceptado = datos.get("contexto_aceptado", False)
 
+    # None = el cliente no mandó el campo: se conservan las condiciones guardadas
+    condiciones = datos.get("condiciones")
+
     cursor = mysql.connection.cursor()
 
     cursor.execute("""
@@ -170,7 +180,8 @@ def actualizar_usuario(id):
             fecha_nacimiento = %s,
             email = %s,
             contrasenia = %s,
-            contexto_aceptado = %s
+            contexto_aceptado = %s,
+            condiciones = COALESCE(%s, condiciones)
         WHERE id = %s
     """, (
         nombre,
@@ -179,14 +190,19 @@ def actualizar_usuario(id):
         email,
         contrasenia,
         contexto_aceptado,
+        condiciones,
         id
     ))
 
     mysql.connection.commit()
 
+    # rowcount es 0 también cuando no cambió ningún dato, por eso
+    # se confirma con un SELECT que el usuario realmente no existe
     if cursor.rowcount == 0:
-        cursor.close()
-        return jsonify({"error": "Usuario no encontrado"}), 404
+        cursor.execute("SELECT 1 FROM usuario WHERE id = %s", (id,))
+        if cursor.fetchone() is None:
+            cursor.close()
+            return jsonify({"error": "Usuario no encontrado"}), 404
 
     cursor.close()
 
