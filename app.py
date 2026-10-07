@@ -2,8 +2,6 @@ from flask import Flask, request, jsonify
 from flask_mysqldb import MySQL
 from flask_cors import CORS, cross_origin
 import os
-import json
-import urllib.request
 
 app = Flask(__name__)
 
@@ -120,19 +118,7 @@ def crear_usuario():
     contexto_aceptado = datos.get("contexto_aceptado", False)
     condiciones = datos.get("condiciones", "")
 
-    email = email.strip()
-
     cursor = mysql.connection.cursor()
-
-    # No permitir dos cuentas con el mismo correo (sin importar mayúsculas)
-    cursor.execute(
-        "SELECT id FROM usuario WHERE LOWER(email) = %s",
-        (email.lower(),)
-    )
-
-    if cursor.fetchone():
-        cursor.close()
-        return jsonify({"error": "Ya existe una cuenta con ese correo"}), 409
 
     cursor.execute("""
         INSERT INTO usuario
@@ -184,19 +170,7 @@ def actualizar_usuario(id):
     # None = el cliente no mandó el campo: se conservan las condiciones guardadas
     condiciones = datos.get("condiciones")
 
-    email = email.strip()
-
     cursor = mysql.connection.cursor()
-
-    # El correo no puede ser el de otro usuario
-    cursor.execute(
-        "SELECT id FROM usuario WHERE LOWER(email) = %s AND id <> %s",
-        (email.lower(), id)
-    )
-
-    if cursor.fetchone():
-        cursor.close()
-        return jsonify({"error": "Ya existe una cuenta con ese correo"}), 409
 
     cursor.execute("""
         UPDATE usuario
@@ -234,122 +208,6 @@ def actualizar_usuario(id):
 
     return jsonify({
         "mensaje": "Usuario actualizado correctamente"
-    })
-
-
-# Datos del usuario que se devuelven al iniciar sesión (nunca la contraseña)
-def usuario_publico(fila):
-    return {
-        "id": fila[0],
-        "nombre": fila[1],
-        "apellido": fila[2],
-        "fecha_nacimiento": str(fila[3]),
-        "email": fila[4],
-        "contexto_aceptado": bool(fila[5]),
-        "condiciones": fila[6] or ""
-    }
-
-
-# Iniciar sesión con correo y contraseña
-@app.route("/login", methods=["POST"])
-def login():
-
-    datos = request.json or {}
-
-    email = (datos.get("email") or "").strip().lower()
-    contrasenia = datos.get("contrasenia") or ""
-
-    if not email or not contrasenia:
-        return jsonify({"error": "Ingresá tu correo y tu contraseña"}), 400
-
-    cursor = mysql.connection.cursor()
-
-    cursor.execute("""
-        SELECT
-            id,
-            nombre,
-            apellido,
-            fecha_nacimiento,
-            email,
-            contexto_aceptado,
-            condiciones
-        FROM usuario
-        WHERE LOWER(email) = %s AND contrasenia = %s
-    """, (email, contrasenia))
-
-    usuario = cursor.fetchone()
-
-    cursor.close()
-
-    if not usuario:
-        return jsonify({"error": "Correo o contraseña incorrectos"}), 401
-
-    return jsonify({
-        "mensaje": "Sesión iniciada correctamente",
-        "usuario": usuario_publico(usuario)
-    })
-
-
-# Iniciar sesión con Google: el servidor verifica el token con Google
-@app.route("/login/google", methods=["POST"])
-def login_google():
-
-    datos = request.json or {}
-
-    token = datos.get("token")
-
-    if not token:
-        return jsonify({"error": "Falta el token de Google"}), 400
-
-    try:
-        peticion = urllib.request.Request(
-            "https://www.googleapis.com/oauth2/v3/userinfo",
-            headers={"Authorization": "Bearer " + token}
-        )
-
-        with urllib.request.urlopen(peticion, timeout=10) as respuesta:
-            cuenta_google = json.loads(respuesta.read().decode("utf-8"))
-
-    except Exception:
-        return jsonify({"error": "No se pudo verificar la cuenta de Google"}), 401
-
-    email = (cuenta_google.get("email") or "").strip().lower()
-
-    if not email:
-        return jsonify({"error": "La cuenta de Google no tiene correo"}), 401
-
-    cursor = mysql.connection.cursor()
-
-    cursor.execute("""
-        SELECT
-            id,
-            nombre,
-            apellido,
-            fecha_nacimiento,
-            email,
-            contexto_aceptado,
-            condiciones
-        FROM usuario
-        WHERE LOWER(email) = %s
-    """, (email,))
-
-    usuario = cursor.fetchone()
-
-    cursor.close()
-
-    if not usuario:
-        # Cuenta de Google que todavía no está registrada en CallFit
-        return jsonify({
-            "error": "Tu cuenta de Google todavía no está registrada",
-            "registrado": False,
-            "email": email,
-            "nombre": cuenta_google.get("given_name") or "",
-            "apellido": cuenta_google.get("family_name") or ""
-        }), 404
-
-    return jsonify({
-        "mensaje": "Sesión iniciada con Google",
-        "usuario": usuario_publico(usuario)
     })
 
 
