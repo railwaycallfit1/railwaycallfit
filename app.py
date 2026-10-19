@@ -3,6 +3,8 @@ from flask_mysqldb import MySQL
 from flask_cors import CORS, cross_origin
 import os
 import json
+import hmac
+import bcrypt
 import urllib.request
 
 app = Flask(__name__)
@@ -24,10 +26,34 @@ CORS(app)
 
 
 # ============================================================
+# HASHEO DE CONTRASEÑAS (bcrypt)
+# ============================================================
+
+def _bytes(contrasenia):
+    # bcrypt solo usa los primeros 72 bytes
+    return contrasenia.encode("utf-8")[:72]
+
+
+def hashear_contrasenia(contrasenia):
+    return bcrypt.hashpw(_bytes(contrasenia), bcrypt.gensalt()).decode("utf-8")
+
+
+def es_hash(valor):
+    return bool(valor) and valor.startswith(("$2a$", "$2b$", "$2y$"))
+
+
+def verificar_contrasenia(contrasenia, hash_guardado):
+    try:
+        return bcrypt.checkpw(_bytes(contrasenia), hash_guardado.encode("utf-8"))
+    except (ValueError, AttributeError):
+        return False
+
+
+# ============================================================
 # USUARIO
 # ============================================================
 
-# Obtener todos los usuarios
+# Obtener todos los usuarios (sin contraseña)
 @app.route("/usuario", methods=["GET"])
 def obtener_usuarios():
 
@@ -40,7 +66,6 @@ def obtener_usuarios():
             apellido,
             fecha_nacimiento,
             email,
-            contrasenia,
             contexto_aceptado,
             condiciones
         FROM usuario
@@ -59,15 +84,14 @@ def obtener_usuarios():
             "apellido": usuario[2],
             "fecha_nacimiento": str(usuario[3]),
             "email": usuario[4],
-            "contrasenia": usuario[5],
-            "contexto_aceptado": bool(usuario[6]),
-            "condiciones": usuario[7] or ""
+            "contexto_aceptado": bool(usuario[5]),
+            "condiciones": usuario[6] or ""
         })
 
     return jsonify(resultado)
 
 
-# Obtener usuario por ID
+# Obtener usuario por ID (sin contraseña)
 @app.route("/usuario/<int:id>", methods=["GET"])
 def obtener_usuario(id):
 
@@ -80,7 +104,6 @@ def obtener_usuario(id):
             apellido,
             fecha_nacimiento,
             email,
-            contrasenia,
             contexto_aceptado,
             condiciones
         FROM usuario
@@ -100,9 +123,8 @@ def obtener_usuario(id):
         "apellido": usuario[2],
         "fecha_nacimiento": str(usuario[3]),
         "email": usuario[4],
-        "contrasenia": usuario[5],
-        "contexto_aceptado": bool(usuario[6]),
-        "condiciones": usuario[7] or ""
+        "contexto_aceptado": bool(usuario[5]),
+        "condiciones": usuario[6] or ""
     })
 
 
@@ -116,9 +138,14 @@ def crear_usuario():
     apellido = datos["apellido"]
     fecha_nacimiento = datos["fecha_nacimiento"]
     email = datos["email"]
-    contrasenia = datos["contrasenia"]
     contexto_aceptado = datos.get("contexto_aceptado", False)
     condiciones = datos.get("condiciones", "")
+
+    if not datos.get("contrasenia"):
+        return jsonify({"error": "La contraseña es obligatoria"}), 400
+
+    # La contraseña se guarda siempre hasheada
+    contrasenia = hashear_contrasenia(datos["contrasenia"])
 
     email = email.strip()
 
@@ -178,8 +205,16 @@ def actualizar_usuario(id):
     apellido = datos["apellido"]
     fecha_nacimiento = datos["fecha_nacimiento"]
     email = datos["email"]
-    contrasenia = datos["contrasenia"]
     contexto_aceptado = datos.get("contexto_aceptado", False)
+
+    # La contraseña es opcional: si no viene, se conserva la guardada.
+    # Si viene en texto plano, se hashea. Si viene ya hasheada, se ignora.
+    contrasenia = datos.get("contrasenia")
+
+    if contrasenia and not es_hash(contrasenia):
+        contrasenia = hashear_contrasenia(contrasenia)
+    else:
+        contrasenia = None
 
     # None = el cliente no mandó el campo: se conservan las condiciones guardadas
     condiciones = datos.get("condiciones")
@@ -205,7 +240,7 @@ def actualizar_usuario(id):
             apellido = %s,
             fecha_nacimiento = %s,
             email = %s,
-            contrasenia = %s,
+            contrasenia = COALESCE(%s, contrasenia),
             contexto_aceptado = %s,
             condiciones = COALESCE(%s, condiciones)
         WHERE id = %s
@@ -272,21 +307,45 @@ def login():
             fecha_nacimiento,
             email,
             contexto_aceptado,
-            condiciones
+            condiciones,
+            contrasenia
         FROM usuario
-        WHERE LOWER(email) = %s AND contrasenia = %s
-    """, (email, contrasenia))
+        WHERE LOWER(email) = %s
+    """, (email,))
 
-    usuario = cursor.fetchone()
+    fila = cursor.fetchone()
+
+    if not fila:
+        cursor.close()
+        return jsonify({"error": "Correo o contraseña incorrectos"}), 401
+
+    guardada = fila[7] or ""
+
+    if es_hash(guardada):
+        correcta = verificar_contrasenia(contrasenia, guardada)
+    else:
+        # Usuario viejo con contraseña en texto plano: se compara directo
+        # y, si coincide, se hashea en este mismo momento (migración automática)
+        correcta = bool(guardada) and hmac.compare_digest(
+            guardada.encode("utf-8"),
+            contrasenia.encode("utf-8")
+        )
+
+        if correcta:
+            cursor.execute(
+                "UPDATE usuario SET contrasenia = %s WHERE id = %s",
+                (hashear_contrasenia(contrasenia), fila[0])
+            )
+            mysql.connection.commit()
 
     cursor.close()
 
-    if not usuario:
+    if not correcta:
         return jsonify({"error": "Correo o contraseña incorrectos"}), 401
 
     return jsonify({
         "mensaje": "Sesión iniciada correctamente",
-        "usuario": usuario_publico(usuario)
+        "usuario": usuario_publico(fila[:7])
     })
 
 
