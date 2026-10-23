@@ -6,6 +6,7 @@ import json
 import hmac
 import bcrypt
 import urllib.request
+import urllib.parse
 
 app = Flask(__name__)
 
@@ -23,6 +24,10 @@ app.config["MYSQL_DB"] = os.environ.get("DB_NAME")
 mysql = MySQL(app)
 
 CORS(app)
+
+# Client ID de Google (el mismo que usa inicioSesion.js). Si querés, podés
+# definir GOOGLE_CLIENT_ID como variable en Railway y no hace falta tocar el código.
+GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID") or "1082909113641-hmld5pn8nf3pf44fnnpo918h857i67t5.apps.googleusercontent.com"
 
 
 # ============================================================
@@ -285,6 +290,11 @@ def usuario_publico(fila):
     }
 
 
+# El perfil está completo cuando tiene nombre y apellido (mismo criterio que usa la web)
+def perfil_completo(fila):
+    return bool((fila[1] or "").strip() and (fila[2] or "").strip())
+
+
 # Iniciar sesión con correo y contraseña
 @app.route("/login", methods=["POST"])
 def login():
@@ -349,7 +359,61 @@ def login():
     })
 
 
-# Iniciar sesión con Google: el servidor verifica el token con Google
+# ============================================================
+# LOGIN CON GOOGLE
+# ============================================================
+
+# Verifica el token de Google en el servidor y devuelve los datos de la cuenta
+# (o None si el token no es válido).
+def cuenta_google_desde_token(token):
+
+    if not token or not isinstance(token, str):
+        return None
+
+    try:
+        if token.count(".") == 2:
+            # ID token (JWT): es el que entrega el botón "Iniciar sesión con Google" de la web.
+            # Google valida la firma y el vencimiento; nosotros comprobamos que sea para CallFit.
+            url = "https://oauth2.googleapis.com/tokeninfo?id_token=" + urllib.parse.quote(token, safe="")
+
+            with urllib.request.urlopen(url, timeout=10) as respuesta:
+                cuenta = json.loads(respuesta.read().decode("utf-8"))
+
+            if cuenta.get("aud") != GOOGLE_CLIENT_ID:
+                return None
+
+            if str(cuenta.get("email_verified")).lower() != "true":
+                return None
+
+        else:
+            # Access token (compatibilidad con quien ya lo mandaba así, por ejemplo la app móvil)
+            peticion = urllib.request.Request(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": "Bearer " + token}
+            )
+
+            with urllib.request.urlopen(peticion, timeout=10) as respuesta:
+                cuenta = json.loads(respuesta.read().decode("utf-8"))
+
+    except Exception:
+        return None
+
+    email = (cuenta.get("email") or "").strip().lower()
+
+    if not email:
+        return None
+
+    return {
+        "email": email,
+        "nombre": cuenta.get("given_name") or "",
+        "apellido": cuenta.get("family_name") or "",
+        "foto": cuenta.get("picture") or ""
+    }
+
+
+# Iniciar sesión con Google: el servidor verifica el token y busca el correo en la base.
+#  - Existe  -> devuelve el usuario y si ya completó el perfil (entra directo o completa el formulario)
+#  - No existe -> 404 con registrado = False (la web manda a completar el formulario)
 @app.route("/login/google", methods=["POST"])
 def login_google():
 
@@ -360,22 +424,10 @@ def login_google():
     if not token:
         return jsonify({"error": "Falta el token de Google"}), 400
 
-    try:
-        peticion = urllib.request.Request(
-            "https://www.googleapis.com/oauth2/v3/userinfo",
-            headers={"Authorization": "Bearer " + token}
-        )
+    cuenta = cuenta_google_desde_token(token)
 
-        with urllib.request.urlopen(peticion, timeout=10) as respuesta:
-            cuenta_google = json.loads(respuesta.read().decode("utf-8"))
-
-    except Exception:
+    if not cuenta:
         return jsonify({"error": "No se pudo verificar la cuenta de Google"}), 401
-
-    email = (cuenta_google.get("email") or "").strip().lower()
-
-    if not email:
-        return jsonify({"error": "La cuenta de Google no tiene correo"}), 401
 
     cursor = mysql.connection.cursor()
 
@@ -390,7 +442,7 @@ def login_google():
             condiciones
         FROM usuario
         WHERE LOWER(email) = %s
-    """, (email,))
+    """, (cuenta["email"],))
 
     usuario = cursor.fetchone()
 
@@ -401,15 +453,99 @@ def login_google():
         return jsonify({
             "error": "Tu cuenta de Google todavía no está registrada",
             "registrado": False,
-            "email": email,
-            "nombre": cuenta_google.get("given_name") or "",
-            "apellido": cuenta_google.get("family_name") or ""
+            "email": cuenta["email"],
+            "nombre": cuenta["nombre"],
+            "apellido": cuenta["apellido"],
+            "foto": cuenta["foto"]
         }), 404
 
     return jsonify({
         "mensaje": "Sesión iniciada con Google",
+        "registrado": True,
+        "perfil_completo": perfil_completo(usuario),
+        "foto": cuenta["foto"],
         "usuario": usuario_publico(usuario)
     })
+
+
+# Crear la cuenta de una persona que entró con Google y completó el formulario.
+# El correo sale del token verificado (nunca del cuerpo del pedido) y no se guarda
+# ninguna contraseña: la cuenta solo se puede abrir con Google.
+@app.route("/login/google/registro", methods=["POST"])
+def registro_google():
+
+    datos = request.json or {}
+
+    cuenta = cuenta_google_desde_token(datos.get("token"))
+
+    if not cuenta:
+        return jsonify({"error": "No se pudo verificar la cuenta de Google"}), 401
+
+    nombre = (datos.get("nombre") or "").strip()
+    apellido = (datos.get("apellido") or "").strip()
+    fecha_nacimiento = (datos.get("fecha_nacimiento") or "").strip()
+    contexto_aceptado = bool(datos.get("contexto_aceptado", False))
+    condiciones = datos.get("condiciones") or ""
+
+    if not nombre or not apellido or not fecha_nacimiento:
+        return jsonify({"error": "Completá nombre, apellido y fecha de nacimiento"}), 400
+
+    email = cuenta["email"]
+
+    cursor = mysql.connection.cursor()
+
+    # No permitir dos cuentas con el mismo correo
+    cursor.execute(
+        "SELECT id FROM usuario WHERE LOWER(email) = %s",
+        (email,)
+    )
+
+    if cursor.fetchone():
+        cursor.close()
+        return jsonify({"error": "Ya existe una cuenta con ese correo"}), 409
+
+    # contrasenia = "" : nadie puede entrar con correo y contraseña a esta cuenta
+    # (el login normal rechaza contraseñas vacías y compara contra un valor que no es hash)
+    cursor.execute("""
+        INSERT INTO usuario
+        (
+            nombre,
+            apellido,
+            fecha_nacimiento,
+            email,
+            contrasenia,
+            contexto_aceptado,
+            condiciones
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, (
+        nombre,
+        apellido,
+        fecha_nacimiento,
+        email,
+        "",
+        contexto_aceptado,
+        condiciones
+    ))
+
+    mysql.connection.commit()
+
+    nuevo_id = cursor.lastrowid
+
+    cursor.close()
+
+    return jsonify({
+        "mensaje": "Usuario creado correctamente",
+        "usuario": {
+            "id": nuevo_id,
+            "nombre": nombre,
+            "apellido": apellido,
+            "fecha_nacimiento": fecha_nacimiento,
+            "email": email,
+            "contexto_aceptado": contexto_aceptado,
+            "condiciones": condiciones
+        }
+    }), 201
 
 
 # Eliminar usuario
