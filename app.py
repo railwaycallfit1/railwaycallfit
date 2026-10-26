@@ -72,7 +72,8 @@ def obtener_usuarios():
             fecha_nacimiento,
             email,
             contexto_aceptado,
-            condiciones
+            condiciones,
+            contrasenia
         FROM usuario
     """)
 
@@ -90,7 +91,8 @@ def obtener_usuarios():
             "fecha_nacimiento": str(usuario[3]),
             "email": usuario[4],
             "contexto_aceptado": bool(usuario[5]),
-            "condiciones": usuario[6] or ""
+            "condiciones": usuario[6] or "",
+            "tiene_contrasenia": bool(usuario[7])
         })
 
     return jsonify(resultado)
@@ -110,7 +112,8 @@ def obtener_usuario(id):
             fecha_nacimiento,
             email,
             contexto_aceptado,
-            condiciones
+            condiciones,
+            contrasenia
         FROM usuario
         WHERE id = %s
     """, (id,))
@@ -129,7 +132,8 @@ def obtener_usuario(id):
         "fecha_nacimiento": str(usuario[3]),
         "email": usuario[4],
         "contexto_aceptado": bool(usuario[5]),
-        "condiciones": usuario[6] or ""
+        "condiciones": usuario[6] or "",
+        "tiene_contrasenia": bool(usuario[7])
     })
 
 
@@ -469,8 +473,8 @@ def login_google():
 
 
 # Crear la cuenta de una persona que entró con Google y completó el formulario.
-# El correo sale del token verificado (nunca del cuerpo del pedido) y no se guarda
-# ninguna contraseña: la cuenta solo se puede abrir con Google.
+# El correo sale del token verificado (nunca del cuerpo del pedido). La contraseña
+# que la persona elige en el formulario es obligatoria y se guarda hasheada.
 @app.route("/login/google/registro", methods=["POST"])
 def registro_google():
 
@@ -487,8 +491,19 @@ def registro_google():
     contexto_aceptado = bool(datos.get("contexto_aceptado", False))
     condiciones = datos.get("condiciones") or ""
 
+    # La contraseña es obligatoria: se guarda siempre hasheada
+    contrasenia_plana = datos.get("contrasenia") or ""
+
     if not nombre or not apellido or not fecha_nacimiento:
         return jsonify({"error": "Completá nombre, apellido y fecha de nacimiento"}), 400
+
+    if not contrasenia_plana:
+        return jsonify({"error": "La contraseña es obligatoria"}), 400
+
+    if len(contrasenia_plana) < 8:
+        return jsonify({"error": "La contraseña debe tener al menos 8 caracteres"}), 400
+
+    contrasenia_guardar = hashear_contrasenia(contrasenia_plana)
 
     email = cuenta["email"]
 
@@ -504,8 +519,7 @@ def registro_google():
         cursor.close()
         return jsonify({"error": "Ya existe una cuenta con ese correo"}), 409
 
-    # contrasenia = "" : nadie puede entrar con correo y contraseña a esta cuenta
-    # (el login normal rechaza contraseñas vacías y compara contra un valor que no es hash)
+    # Se guarda el hash de la contraseña que eligió (la cuenta también se puede abrir con Google)
     cursor.execute("""
         INSERT INTO usuario
         (
@@ -523,7 +537,7 @@ def registro_google():
         apellido,
         fecha_nacimiento,
         email,
-        "",
+        contrasenia_guardar,
         contexto_aceptado,
         condiciones
     ))
@@ -573,7 +587,7 @@ def eliminar_usuario(id):
 
 
 # ============================================================
-# CONDICION .. sdfsfdfdfd
+# CONDICION
 # ============================================================
 
 # Obtener condiciones
