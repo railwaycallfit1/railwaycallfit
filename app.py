@@ -573,7 +573,7 @@ def eliminar_usuario(id):
 
 
 # ============================================================
-# CONDICION .. sdfs
+# CONDICION .. sdfsfdfdfd
 # ============================================================
 
 # Obtener condiciones
