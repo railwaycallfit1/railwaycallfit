@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_mysqldb import MySQL
 from flask_cors import CORS, cross_origin
 import os
+import re
 import json
 import hmac
 import bcrypt
@@ -52,6 +53,33 @@ def verificar_contrasenia(contrasenia, hash_guardado):
         return bcrypt.checkpw(_bytes(contrasenia), hash_guardado.encode("utf-8"))
     except (ValueError, AttributeError):
         return False
+
+
+# ============================================================
+# FOTO DE PERFIL
+# ============================================================
+
+# La foto se guarda en la columna usuario.foto_perfil (MEDIUMTEXT) como texto:
+#  - foto elegida por la persona: "data:image/jpeg;base64,..." (la web y la app la
+#    achican a ~256 px antes de enviarla, así que pesa 20-40 KB)
+#  - foto de Google: la dirección https://lh3.googleusercontent.com/...
+FOTO_MAX_CARACTERES = 400000  # ~300 KB de texto: de sobra para una foto de 256 px
+
+FOTO_DATA_URL = re.compile(r"data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+")
+
+
+def foto_valida(foto):
+
+    if not isinstance(foto, str) or len(foto) > FOTO_MAX_CARACTERES:
+        return False
+
+    # Foto de Google (solo direcciones de Google)
+    if foto.startswith("https://"):
+        host = urllib.parse.urlparse(foto).hostname or ""
+        return host.endswith(".googleusercontent.com")
+
+    # Foto elegida por la persona
+    return bool(FOTO_DATA_URL.fullmatch(foto))
 
 
 # ============================================================
@@ -281,6 +309,74 @@ def actualizar_usuario(id):
     })
 
 
+# Obtener la foto de perfil de un usuario
+# (va en una ruta aparte para que el resto de las respuestas de usuario no
+# arrastren la foto, que es lo más pesado)
+@app.route("/usuario/<int:id>/foto", methods=["GET"])
+def obtener_foto_usuario(id):
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute(
+        "SELECT foto_perfil FROM usuario WHERE id = %s",
+        (id,)
+    )
+
+    fila = cursor.fetchone()
+
+    cursor.close()
+
+    if not fila:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    foto = fila[0]
+
+    if isinstance(foto, bytes):
+        foto = foto.decode("utf-8")
+
+    # foto = None cuando todavía no tiene
+    return jsonify({"foto": foto or None})
+
+
+# Guardar o quitar la foto de perfil. No toca ningún otro dato del usuario.
+#   body: { "foto": "data:image/jpeg;base64,..." }  -> guarda la foto
+#   body: { "foto": null }                          -> la quita
+@app.route("/usuario/<int:id>/foto", methods=["PUT"])
+def actualizar_foto_usuario(id):
+
+    datos = request.get_json(silent=True) or {}
+
+    foto = datos.get("foto")
+
+    if foto is None or foto == "":
+        foto = None
+    elif not foto_valida(foto):
+        return jsonify({"error": "La foto no es válida o es demasiado grande"}), 400
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute(
+        "UPDATE usuario SET foto_perfil = %s WHERE id = %s",
+        (foto, id)
+    )
+
+    mysql.connection.commit()
+
+    # rowcount es 0 también cuando la foto ya era la misma, por eso se
+    # confirma con un SELECT que el usuario realmente no existe
+    if cursor.rowcount == 0:
+        cursor.execute("SELECT 1 FROM usuario WHERE id = %s", (id,))
+        if cursor.fetchone() is None:
+            cursor.close()
+            return jsonify({"error": "Usuario no encontrado"}), 404
+
+    cursor.close()
+
+    return jsonify({
+        "mensaje": "Foto de perfil actualizada correctamente"
+    })
+
+
 # Datos del usuario que se devuelven al iniciar sesión (nunca la contraseña)
 def usuario_publico(fila):
     return {
@@ -450,6 +546,19 @@ def login_google():
 
     usuario = cursor.fetchone()
 
+    # Si todavía no tiene foto guardada, se guarda la de Google. Si la persona ya
+    # eligió una propia, no se pisa. Si algo falla, el inicio de sesión sigue igual.
+    if usuario and foto_valida(cuenta["foto"]):
+        try:
+            cursor.execute("""
+                UPDATE usuario
+                SET foto_perfil = %s
+                WHERE id = %s AND foto_perfil IS NULL
+            """, (cuenta["foto"], usuario[0]))
+            mysql.connection.commit()
+        except Exception:
+            mysql.connection.rollback()
+
     cursor.close()
 
     if not usuario:
@@ -545,6 +654,18 @@ def registro_google():
     mysql.connection.commit()
 
     nuevo_id = cursor.lastrowid
+
+    # La foto de Google queda guardada desde el primer momento. Si falla, la
+    # cuenta se crea igual.
+    if foto_valida(cuenta["foto"]):
+        try:
+            cursor.execute(
+                "UPDATE usuario SET foto_perfil = %s WHERE id = %s",
+                (cuenta["foto"], nuevo_id)
+            )
+            mysql.connection.commit()
+        except Exception:
+            mysql.connection.rollback()
 
     cursor.close()
 
