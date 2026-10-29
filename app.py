@@ -1203,6 +1203,26 @@ def eliminar_registro_glucosa(id):
 # PLAN SEMANAL
 # ============================================================
 
+# Porciones permitidas por comida del plan: enteros de 1 a 6
+PORCIONES_MIN = 1
+PORCIONES_MAX = 6
+
+
+def porciones_validas(valor):
+    # Devuelve el número de porciones (int) o None si no es válido
+    if isinstance(valor, bool):
+        return None
+    try:
+        numero = int(valor)
+    except (TypeError, ValueError):
+        return None
+    if numero != valor and str(numero) != str(valor):
+        return None
+    if numero < PORCIONES_MIN or numero > PORCIONES_MAX:
+        return None
+    return numero
+
+
 # Obtener plan semanal
 @app.route("/plan_semanal", methods=["GET"])
 def obtener_plan_semanal():
@@ -1216,6 +1236,7 @@ def obtener_plan_semanal():
             p.id_receta,
             p.dia,
             p.comida,
+            p.multiplicador,
             r.titulo,
             r.descripcion,
             r.imagen,
@@ -1246,17 +1267,18 @@ def obtener_plan_semanal():
             "id_receta": plan[2],
             "dia": plan[3],
             "comida": plan[4],
-            "titulo": plan[5],
-            "descripcion": plan[6],
-            "imagen": plan[7],
-            "porcion": plan[8],
-            "calorias": float(plan[9]),
-            "proteinas": float(plan[10]),
-            "carbohidratos": float(plan[11]),
-            "grasas": float(plan[12]),
-            "sodio": float(plan[13]),
-            "ingredientes": plan[14],
-            "preparacion": plan[15]
+            "multiplicador": int(plan[5]) if plan[5] is not None else 1,
+            "titulo": plan[6],
+            "descripcion": plan[7],
+            "imagen": plan[8],
+            "porcion": plan[9],
+            "calorias": float(plan[10]),
+            "proteinas": float(plan[11]),
+            "carbohidratos": float(plan[12]),
+            "grasas": float(plan[13]),
+            "sodio": float(plan[14]),
+            "ingredientes": plan[15],
+            "preparacion": plan[16]
         })
 
     return jsonify(resultado)
@@ -1268,6 +1290,14 @@ def crear_plan_semanal():
 
     datos = request.json
 
+    # Si no viene el dato, se guarda con 1 porción
+    multiplicador = porciones_validas(datos.get("multiplicador", 1))
+
+    if multiplicador is None:
+        return jsonify({
+            "error": "Las porciones deben ser un número entero de 1 a 6"
+        }), 400
+
     cursor = mysql.connection.cursor()
 
     cursor.execute("""
@@ -1276,14 +1306,16 @@ def crear_plan_semanal():
             Usuario_id,
             id_receta,
             dia,
-            comida
+            comida,
+            multiplicador
         )
-        VALUES (%s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s)
     """, (
         datos["Usuario_id"],
         datos["id_receta"],
         datos["dia"],
-        datos["comida"]
+        datos["comida"],
+        multiplicador
     ))
 
     mysql.connection.commit()
@@ -1294,7 +1326,8 @@ def crear_plan_semanal():
 
     return jsonify({
         "mensaje": "Plan semanal creado correctamente",
-        "id_plan": nuevo_id
+        "id_plan": nuevo_id,
+        "multiplicador": multiplicador
     }), 201
 
 
@@ -1332,6 +1365,49 @@ def actualizar_plan_semanal(id):
 
     return jsonify({
         "mensaje": "Plan semanal actualizado correctamente"
+    })
+
+
+# Cambiar solo las porciones de una comida del plan
+@app.route("/plan_semanal/<int:id>/porciones", methods=["PUT"])
+def actualizar_porciones_plan_semanal(id):
+
+    datos = request.json or {}
+
+    multiplicador = porciones_validas(datos.get("multiplicador"))
+
+    if multiplicador is None:
+        return jsonify({
+            "error": "Las porciones deben ser un número entero de 1 a 6"
+        }), 400
+
+    cursor = mysql.connection.cursor()
+
+    cursor.execute("""
+        UPDATE plan_semanal
+        SET multiplicador = %s
+        WHERE id_plan = %s
+    """, (multiplicador, id))
+
+    mysql.connection.commit()
+
+    # rowcount es 0 también si el valor era el mismo que ya estaba,
+    # así que se comprueba que el plan exista con un SELECT
+    if cursor.rowcount == 0:
+        cursor.execute(
+            "SELECT 1 FROM plan_semanal WHERE id_plan = %s", (id,)
+        )
+        existe = cursor.fetchone()
+        if not existe:
+            cursor.close()
+            return jsonify({"error": "Plan no encontrado"}), 404
+
+    cursor.close()
+
+    return jsonify({
+        "mensaje": "Porciones actualizadas correctamente",
+        "id_plan": id,
+        "multiplicador": multiplicador
     })
 
 
