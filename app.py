@@ -820,7 +820,54 @@ def eliminar_condicion(id):
 # RECETAS
 # ============================================================
 
-# Obtener todas las recetas
+def normalizar_ids_condicion(valor):
+    """
+    Acepta condiciones como:
+      - 1
+      - "1"
+      - "1,3"
+      - [1, 3]
+    y devuelve una cadena única, por ejemplo "1,3".
+    """
+    if isinstance(valor, (list, tuple, set)):
+        partes = valor
+    else:
+        partes = str(valor or "").split(",")
+
+    ids = []
+    for parte in partes:
+        texto = str(parte).strip()
+        if texto.isdigit() and texto not in ids:
+            ids.append(texto)
+
+    return ",".join(ids)
+
+
+def obtener_nombres_condiciones(cursor, ids_condicion):
+    """Devuelve los nombres de las condiciones asociadas a una receta."""
+    ids = normalizar_ids_condicion(ids_condicion).split(",")
+    ids = [int(x) for x in ids if x]
+
+    if not ids:
+        return []
+
+    placeholders = ",".join(["%s"] * len(ids))
+    cursor.execute(
+        f"SELECT id_condicion, condicion FROM condicion "
+        f"WHERE id_condicion IN ({placeholders})",
+        tuple(ids)
+    )
+    nombres = {str(fila[0]): fila[1] for fila in cursor.fetchall()}
+
+    # Mantiene el orden en el que se guardaron los IDs.
+    return [
+        {"id_condicion": int(id_condicion), "condicion": nombres.get(id_condicion, "")}
+        for id_condicion in map(str, ids)
+    ]
+
+
+# Obtener todas las recetas.
+# Devuelve UNA sola entrada por receta, aunque tenga varias condiciones.
 @app.route("/recetas", methods=["GET"])
 def obtener_recetas():
 
@@ -828,51 +875,57 @@ def obtener_recetas():
 
     cursor.execute("""
         SELECT
-            r.id_receta,
-            r.titulo,
-            r.descripcion,
-            r.imagen,
-            r.porcion,
-            r.calorias,
-            r.proteinas,
-            r.carbohidratos,
-            r.grasas,
-            r.sodio,
-            r.id_condicion,
-            c.condicion,
-            r.ingredientes,
-            r.preparacion
-        FROM recetas r
-        INNER JOIN condicion c
-            ON r.id_condicion = c.id_condicion
+            id_receta,
+            titulo,
+            descripcion,
+            imagen,
+            porcion,
+            calorias,
+            proteinas,
+            carbohidratos,
+            grasas,
+            sodio,
+            id_condicion,
+            ingredientes,
+            preparacion
+        FROM recetas
+        ORDER BY id_receta
     """)
 
     recetas = cursor.fetchall()
-
-    cursor.close()
-
     resultado = []
 
     for receta in recetas:
+        condiciones_receta = obtener_nombres_condiciones(cursor, receta[10])
+        ids_condiciones = normalizar_ids_condicion(receta[10])
+
         resultado.append({
             "id_receta": receta[0],
             "titulo": receta[1],
             "descripcion": receta[2],
             "imagen": receta[3],
             "porcion": receta[4],
-            "calorias": float(receta[5]),
-            "proteinas": float(receta[6]),
-            "carbohidratos": float(receta[7]),
-            "grasas": float(receta[8]),
-            "sodio": float(receta[9]),
-            "id_condicion": receta[10],
-            "condicion": receta[11],
-            "ingredientes": receta[12],
-            "preparacion": receta[13]
+            "calorias": float(receta[5]) if receta[5] is not None else 0,
+            "proteinas": float(receta[6]) if receta[6] is not None else 0,
+            "carbohidratos": float(receta[7]) if receta[7] is not None else 0,
+            "grasas": float(receta[8]) if receta[8] is not None else 0,
+            "sodio": float(receta[9]) if receta[9] is not None else 0,
+            # Se conserva el campo original como texto: por ejemplo "1,3".
+            "id_condicion": ids_condiciones,
+            # Lista adicional para poder filtrar por cualquiera de las condiciones.
+            "id_condiciones": [c for c in ids_condiciones.split(",") if c],
+            "condicion": ", ".join(
+                c["condicion"] for c in condiciones_receta if c["condicion"]
+            ),
+            "condiciones": [
+                c["condicion"] for c in condiciones_receta if c["condicion"]
+            ],
+            "ingredientes": receta[11],
+            "preparacion": receta[12]
         })
 
+    cursor.close()
     return jsonify(resultado)
-
 
 # Obtener receta por ID
 @app.route("/recetas/<int:id>", methods=["GET"])
@@ -882,32 +935,34 @@ def obtener_receta(id):
 
     cursor.execute("""
         SELECT
-            r.id_receta,
-            r.titulo,
-            r.descripcion,
-            r.imagen,
-            r.porcion,
-            r.calorias,
-            r.proteinas,
-            r.carbohidratos,
-            r.grasas,
-            r.sodio,
-            r.id_condicion,
-            c.condicion,
-            r.ingredientes,
-            r.preparacion
-        FROM recetas r
-        INNER JOIN condicion c
-            ON r.id_condicion = c.id_condicion
-        WHERE r.id_receta = %s
+            id_receta,
+            titulo,
+            descripcion,
+            imagen,
+            porcion,
+            calorias,
+            proteinas,
+            carbohidratos,
+            grasas,
+            sodio,
+            id_condicion,
+            ingredientes,
+            preparacion
+        FROM recetas
+        WHERE id_receta = %s
     """, (id,))
 
     receta = cursor.fetchone()
 
+    if not receta:
+        cursor.close()
+        return jsonify({"error": "Receta no encontrada"}), 404
+
+    condiciones_receta = obtener_nombres_condiciones(cursor, receta[10])
     cursor.close()
 
-    if not receta:
-        return jsonify({"error": "Receta no encontrada"}), 404
+    ids_condiciones = normalizar_ids_condicion(receta[10])
+    primer_id = int(ids_condiciones.split(",")[0]) if ids_condiciones else None
 
     return jsonify({
         "id_receta": receta[0],
@@ -915,15 +970,18 @@ def obtener_receta(id):
         "descripcion": receta[2],
         "imagen": receta[3],
         "porcion": receta[4],
-        "calorias": float(receta[5]),
-        "proteinas": float(receta[6]),
-        "carbohidratos": float(receta[7]),
-        "grasas": float(receta[8]),
-        "sodio": float(receta[9]),
-        "id_condicion": receta[10],
-        "condicion": receta[11],
-        "ingredientes": receta[12],
-        "preparacion": receta[13]
+        "calorias": float(receta[5]) if receta[5] is not None else 0,
+        "proteinas": float(receta[6]) if receta[6] is not None else 0,
+        "carbohidratos": float(receta[7]) if receta[7] is not None else 0,
+        "grasas": float(receta[8]) if receta[8] is not None else 0,
+        "sodio": float(receta[9]) if receta[9] is not None else 0,
+        # En el detalle se conserva un ID numérico por compatibilidad.
+        "id_condicion": primer_id,
+        "id_condiciones": ids_condiciones,
+        "condicion": ", ".join(c["condicion"] for c in condiciones_receta if c["condicion"]),
+        "condiciones": [c["condicion"] for c in condiciones_receta if c["condicion"]],
+        "ingredientes": receta[11],
+        "preparacion": receta[12]
     })
 
 
@@ -931,7 +989,11 @@ def obtener_receta(id):
 @app.route("/recetas", methods=["POST"])
 def crear_receta():
 
-    datos = request.json
+    datos = request.json or {}
+    id_condicion = normalizar_ids_condicion(datos.get("id_condicion"))
+
+    if not id_condicion:
+        return jsonify({"error": "Seleccioná al menos una condición"}), 400
 
     cursor = mysql.connection.cursor()
 
@@ -962,15 +1024,13 @@ def crear_receta():
         datos["carbohidratos"],
         datos["grasas"],
         datos["sodio"],
-        datos["id_condicion"],
+        id_condicion,
         datos["ingredientes"],
         datos["preparacion"]
     ))
 
     mysql.connection.commit()
-
     nuevo_id = cursor.lastrowid
-
     cursor.close()
 
     return jsonify({
@@ -983,7 +1043,11 @@ def crear_receta():
 @app.route("/recetas/<int:id>", methods=["PUT"])
 def actualizar_receta(id):
 
-    datos = request.json
+    datos = request.json or {}
+    id_condicion = normalizar_ids_condicion(datos.get("id_condicion"))
+
+    if not id_condicion:
+        return jsonify({"error": "Seleccioná al menos una condición"}), 400
 
     cursor = mysql.connection.cursor()
 
@@ -1013,7 +1077,7 @@ def actualizar_receta(id):
         datos["carbohidratos"],
         datos["grasas"],
         datos["sodio"],
-        datos["id_condicion"],
+        id_condicion,
         datos["ingredientes"],
         datos["preparacion"],
         id
@@ -1021,8 +1085,6 @@ def actualizar_receta(id):
 
     mysql.connection.commit()
 
-    # rowcount es 0 también cuando no cambió ningún dato (guardar sin tocar nada),
-    # por eso se confirma con un SELECT que la receta realmente no existe
     if cursor.rowcount == 0:
         cursor.execute("SELECT 1 FROM recetas WHERE id_receta = %s", (id,))
         if cursor.fetchone() is None:
@@ -1053,7 +1115,6 @@ def eliminar_receta(id):
         return jsonify({"error": "Receta no encontrada"}), 404
 
     try:
-
         cursor.execute("""
             DELETE FROM plan_semanal
             WHERE id_receta = %s
@@ -1069,12 +1130,9 @@ def eliminar_receta(id):
         mysql.connection.commit()
 
     except Exception as error:
-
         mysql.connection.rollback()
         cursor.close()
-
         print("Error al eliminar la receta:", error)
-
         return jsonify({
             "error": "No se pudo eliminar la receta"
         }), 500
