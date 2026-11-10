@@ -1021,9 +1021,13 @@ def actualizar_receta(id):
 
     mysql.connection.commit()
 
+    # rowcount es 0 también cuando no cambió ningún dato (guardar sin tocar nada),
+    # por eso se confirma con un SELECT que la receta realmente no existe
     if cursor.rowcount == 0:
-        cursor.close()
-        return jsonify({"error": "Receta no encontrada"}), 404
+        cursor.execute("SELECT 1 FROM recetas WHERE id_receta = %s", (id,))
+        if cursor.fetchone() is None:
+            cursor.close()
+            return jsonify({"error": "Receta no encontrada"}), 404
 
     cursor.close()
 
@@ -1033,26 +1037,53 @@ def actualizar_receta(id):
 
 
 # Eliminar receta
+# También se borra de plan_semanal (de todos los usuarios), en una sola
+# transacción: o se borra todo o no se borra nada.
 @app.route("/recetas/<int:id>", methods=["DELETE"])
 def eliminar_receta(id):
 
     cursor = mysql.connection.cursor()
 
-    cursor.execute("""
-        DELETE FROM recetas
-        WHERE id_receta = %s
-    """, (id,))
+    cursor.execute(
+        "SELECT 1 FROM recetas WHERE id_receta = %s", (id,)
+    )
 
-    mysql.connection.commit()
-
-    if cursor.rowcount == 0:
+    if cursor.fetchone() is None:
         cursor.close()
         return jsonify({"error": "Receta no encontrada"}), 404
+
+    try:
+
+        cursor.execute("""
+            DELETE FROM plan_semanal
+            WHERE id_receta = %s
+        """, (id,))
+
+        planes_eliminados = cursor.rowcount
+
+        cursor.execute("""
+            DELETE FROM recetas
+            WHERE id_receta = %s
+        """, (id,))
+
+        mysql.connection.commit()
+
+    except Exception as error:
+
+        mysql.connection.rollback()
+        cursor.close()
+
+        print("Error al eliminar la receta:", error)
+
+        return jsonify({
+            "error": "No se pudo eliminar la receta"
+        }), 500
 
     cursor.close()
 
     return jsonify({
-        "mensaje": "Receta eliminada correctamente"
+        "mensaje": "Receta eliminada correctamente",
+        "planes_eliminados": planes_eliminados
     })
 
 
