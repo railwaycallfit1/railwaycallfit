@@ -28,7 +28,7 @@ CORS(app)
 
 # Client ID de Google (el mismo que usa inicioSesion.js). Si querés, podés
 # definir GOOGLE_CLIENT_ID como variable en Railway y no hace falta tocar el código.
-GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID") or "1082909113641-hmld5pn8nf3pf44fnnpo918h857i67t5.apps.googleusercontent.com"
+GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID") or "549475389078-so7m8l9t88mlvqbfscn9rkkmt38mft0c.apps.googleusercontent.com"
 
 
 # ============================================================
